@@ -3,12 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "build": "rollup -c"
+    "build": "vendetta-cli package"
   },
   "devDependencies": {
-    "rollup": "^3.29.4",
-    "rollup-plugin-esbuild": "^5.0.0",
-    "esbuild": "^0.19.11",
-    "typescript": "^5.3.3"
+    "vendetta-cli": "^1.0.0"
   }
 }
