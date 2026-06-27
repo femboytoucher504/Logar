@@ -7,21 +7,21 @@ const { ScrollView, View, Text, TextInput, Button } = Components;
 export default function Settings() {
     const [wordInput, setWordInput] = React.useState("");
     const [tokenInput, setTokenInput] = React.useState(storage.cloudToken || "");
+    const [urlInput, setUrlInput] = React.useState(storage.supabaseUrl || "");
+    const [keyInput, setKeyInput] = React.useState(storage.supabaseKey || "");
     const [words, setWords] = React.useState<string[]>(storage.filteredWords || []);
     const [logs, setLogs] = React.useState<any[]>(storage.logs || []);
 
-    const API_URL = "https://zstjrxjkfmkyjanwdfpi.supabase.co/rest/v1/logar_backup";
-    const SUPABASE_KEY = "sb_publishable_bHVZHwUgtW8Rme8gICpXZQ_FWc0eatj";
-
     const triggerCloudSave = async (updatedLogs: any[], updatedWords: string[]) => {
-        if (!storage.cloudToken) return;
+        if (!storage.cloudToken || !storage.supabaseUrl || !storage.supabaseKey) return;
         try {
-            await fetch(`${API_URL}?user_id=eq.${storage.cloudToken}`, {
+            const cleanUrl = storage.supabaseUrl.endsWith('/') ? storage.supabaseUrl : storage.supabaseUrl + '/';
+            await fetch(`${cleanUrl}rest/v1/logar_backup?user_id=eq.${storage.cloudToken}`, {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json", 
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "apikey": storage.supabaseKey,
+                    "Authorization": `Bearer ${storage.supabaseKey}`,
                     "Prefer": "resolution=merge-duplicates"
                 },
                 body: JSON.stringify({ 
@@ -45,9 +45,12 @@ export default function Settings() {
         triggerCloudSave(logs, updated);
     };
 
-    const saveToken = () => {
+    const saveConfig = () => {
         storage.cloudToken = tokenInput;
+        storage.supabaseUrl = urlInput;
+        storage.supabaseKey = keyInput;
         triggerCloudSave(logs, words);
+        alert("Configuration Saved!");
     };
 
     const deleteLogItem = (timestamp: number) => {
@@ -66,12 +69,23 @@ export default function Settings() {
     return (
         <ScrollView style={{ padding: 10 }}>
             <Text style={{ fontSize: 18, fontWeight: "bold" }}>Logar Config</Text>
+            
             <TextInput
-                placeholder="Enter a unique Sync ID / Token"
+                placeholder="Supabase Project URL"
+                value={urlInput}
+                onChangeText={setUrlInput}
+            />
+            <TextInput
+                placeholder="Supabase Anon Public Key"
+                value={keyInput}
+                onChangeText={setKeyInput}
+            />
+            <TextInput
+                placeholder="Unique Sync ID / Token"
                 value={tokenInput}
                 onChangeText={setTokenInput}
             />
-            <Button text="Save Token" onPress={saveToken} />
+            <Button text="Save Configuration" onPress={saveConfig} />
 
             <View style={{ marginVertical: 15 }} />
 
