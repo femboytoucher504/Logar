@@ -16,7 +16,6 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// index.ts
 var logar_exports = {};
 __export(logar_exports, {
   onLoad: () => onLoad,
@@ -45,7 +44,7 @@ async function syncToCloud(payload) {
         user_id: import_plugin.storage.cloudToken,
         filtered_words: payload.filteredWords,
         logs: payload.logs,
-        updated_at: (/* @__date__ */ new Date()).toISOString()
+        updated_at: new Date().toISOString()
       })
     });
   } catch (err) {
@@ -94,7 +93,7 @@ var onLoad = () => {
         syncToCloud({ logs: import_plugin.storage.logs, filteredWords: import_plugin.storage.filteredWords });
         setTimeout(() => {
           LocalMessageHelper.sendBotMessage(channelId, {
-            content: `\u26A0\uFE0F **Deleted (${originalMessage.author.username}):** ${originalMessage.content}\n*Sent at: ${new Date(originalMessage.timestamp).toLocaleTimeString()}*`,
+            content: `⚠️ **Deleted (${originalMessage.author.username}):** ${originalMessage.content}\n*Sent at: ${new Date(originalMessage.timestamp).toLocaleTimeString()}*`,
             flags: 64
           });
         }, 500);
@@ -105,4 +104,3 @@ var onLoad = () => {
 var onUnload = () => {
   import_patcher.patcher.unpatchAll();
 };
-      
