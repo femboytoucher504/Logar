@@ -1,9 +1,8 @@
 {
   "name": "Logar",
-  "description": "Cloud-synced word filtering and ephemeral deleted message logger.",
-  "author": "YourUsername",
-  "main": "index.ts",
+  "description": "Cloud synced message logger and keyword filter plugin for Revenge.",
+  "author": "femboytoucher504",
+  "main": "dist/index.js",
   "hash": "logar-sync-logger",
   "version": "1.0.0"
 }
-
