@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "build": "vendetta-cli package"
+    "build": "esbuild index.ts --bundle --minify --format=cjs --platform=node --outfile=dist/index.js"
   },
   "devDependencies": {
-    "vendetta-cli": "^1.0.0"
+    "esbuild": "^0.21.5"
   }
 }
