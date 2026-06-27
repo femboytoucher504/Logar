@@ -1,0 +1,11 @@
+{
+  "name": "logar",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "build": "esbuild index.ts --bundle --minify --format=cjs --platform=node --external:@revenge/* --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5"
+  }
+}
