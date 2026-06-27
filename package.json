@@ -1,0 +1,13 @@
+{
+  "name": "logar",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "build": "rollup -c"
+  },
+  "devDependencies": {
+    "rollup": "^3.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+
