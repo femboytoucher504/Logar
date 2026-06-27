@@ -10,13 +10,26 @@ export default function Settings() {
     const [words, setWords] = React.useState<string[]>(storage.filteredWords || []);
     const [logs, setLogs] = React.useState<any[]>(storage.logs || []);
 
+    const API_URL = "https://zstjrxjkfmkyjanwdfpi.supabase.co/rest/v1/logar_backup";
+    const SUPABASE_KEY = "sb_publishable_bHVZHwUgtW8Rme8gICpXZQ_FWc0eatj";
+
     const triggerCloudSave = async (updatedLogs: any[], updatedWords: string[]) => {
         if (!storage.cloudToken) return;
         try {
-            await fetch("https://api.yourserver.com/v1/sync", {
+            await fetch(`${API_URL}?user_id=eq.${storage.cloudToken}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${storage.cloudToken}` },
-                body: JSON.stringify({ filteredWords: updatedWords, logs: updatedLogs })
+                headers: { 
+                    "Content-Type": "application/json", 
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Prefer": "resolution=merge-duplicates"
+                },
+                body: JSON.stringify({ 
+                    user_id: storage.cloudToken,
+                    filtered_words: updatedWords, 
+                    logs: updatedLogs,
+                    updated_at: new Date().toISOString()
+                })
             });
         } catch (e) {
             console.error(e);
@@ -34,6 +47,7 @@ export default function Settings() {
 
     const saveToken = () => {
         storage.cloudToken = tokenInput;
+        triggerCloudSave(logs, words);
     };
 
     const deleteLogItem = (timestamp: number) => {
@@ -53,7 +67,7 @@ export default function Settings() {
         <ScrollView style={{ padding: 10 }}>
             <Text style={{ fontSize: 18, fontWeight: "bold" }}>Logar Config</Text>
             <TextInput
-                placeholder="Cloud API Token"
+                placeholder="Enter a unique Sync ID / Token"
                 value={tokenInput}
                 onChangeText={setTokenInput}
             />
@@ -87,4 +101,4 @@ export default function Settings() {
             ))}
         </ScrollView>
     );
-                  }
+}
