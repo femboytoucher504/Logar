@@ -6,8 +6,9 @@
     "build": "rollup -c"
   },
   "devDependencies": {
-    "rollup": "^3.0.0",
-    "typescript": "^5.0.0"
+    "rollup": "^3.29.4",
+    "rollup-plugin-esbuild": "^5.0.0",
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3"
   }
 }
-
