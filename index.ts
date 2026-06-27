@@ -7,42 +7,16 @@ const MessageActions = metro.findByProps("sendMessage", "receiveMessage");
 const LocalMessageHelper = metro.findByProps("sendBotMessage", "createBotMessage"); 
 const ChannelStore = metro.findByProps("getChannel", "getDMFromUserId");
 
-const API_URL = "https://zstjrxjkfmkyjanwdfpi.supabase.co/rest/v1/logar_backup";
-const SUPABASE_KEY = "sb_publishable_bHVZHwUgtW8Rme8gICpXZQ_FWc0eatj";
-
-function shouldLog(channelId: string): boolean {
-    if (!storage.filterMode) return true; 
-
-    const channel = ChannelStore.getChannel(channelId);
-    const guildId = channel?.guild_id;
-
-    if (storage.filterMode === "whitelist") {
-        if (!guildId) return storage.includeDMs;
-        return storage.allowedGuilds?.includes(guildId);
-    }
-
-    if (storage.filterMode === "blacklist") {
-        if (!guildId) return !storage.excludeDMs;
-        return !storage.blockedGuilds?.includes(guildId);
-    }
-
-    return true;
-}
-
-function checkFilteredWords(text: string): boolean {
-    const filters: string[] = storage.filteredWords || [];
-    return filters.some(word => text.toLowerCase().includes(word.toLowerCase()));
-}
-
 async function syncToCloud(payload: any) {
-    if (!storage.cloudToken) return;
+    if (!storage.cloudToken || !storage.supabaseUrl || !storage.supabaseKey) return;
     try {
-        await fetch(`${API_URL}?user_id=eq.${storage.cloudToken}`, {
+        const cleanUrl = storage.supabaseUrl.endsWith('/') ? storage.supabaseUrl : storage.supabaseUrl + '/';
+        await fetch(`${cleanUrl}rest/v1/logar_backup?user_id=eq.${storage.cloudToken}`, {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json", 
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "apikey": storage.supabaseKey,
+                "Authorization": `Bearer ${storage.supabaseKey}`,
                 "Prefer": "resolution=merge-duplicates"
             },
             body: JSON.stringify({
@@ -57,12 +31,17 @@ async function syncToCloud(payload: any) {
     }
 }
 
+function checkFilteredWords(text: string): boolean {
+    const filters: string[] = storage.filteredWords || [];
+    return filters.some(word => text.toLowerCase().includes(word.toLowerCase()));
+}
+
 export const onLoad = () => {
     patcher.instead("sendMessage", MessageActions, (args, original) => {
         const [channelId, message] = args;
         const content = message.content;
 
-        if (shouldLog(channelId) && checkFilteredWords(content)) {
+        if (checkFilteredWords(content)) {
             const logEntry = {
                 timestamp: Date.now(),
                 content,
@@ -84,7 +63,7 @@ export const onLoad = () => {
             const { id: messageId, channelId } = event;
             const originalMessage = MessageStore.getMessage(channelId, messageId);
 
-            if (originalMessage && shouldLog(channelId)) {
+            if (originalMessage) {
                 const deleteLog = {
                     type: "DELETED_MESSAGE",
                     content: originalMessage.content,
@@ -112,4 +91,3 @@ export const onLoad = () => {
 export const onUnload = () => {
     patcher.unpatchAll();
 };
-
