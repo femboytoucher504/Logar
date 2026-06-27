@@ -22,26 +22,32 @@ __export(logar_exports, {
   onUnload: () => onUnload
 });
 module.exports = __toCommonJS(logar_exports);
-var import_metro = require("@revenge/metro");
-var import_patcher = require("@revenge/patcher");
-var import_plugin = require("@revenge/plugin");
-var MessageStore = import_metro.metro.findByProps("getMessages", "getMessage");
-var MessageActions = import_metro.metro.findByProps("sendMessage", "receiveMessage");
-var LocalMessageHelper = import_metro.metro.findByProps("sendBotMessage", "createBotMessage");
+
+// Revenge / Vendetta global kütüphanelerini güvenli şekilde çekiyoruz
+const { metro, patcher, plugin } = window.revenge || window.vendetta || {};
+
+if (!metro || !patcher || !plugin) {
+  console.error("[Logar] Revenge/Vendetta API bulunamadı!");
+}
+
+var MessageStore = metro?.findByProps("getMessages", "getMessage");
+var MessageActions = metro?.findByProps("sendMessage", "receiveMessage");
+var LocalMessageHelper = metro?.findByProps("sendBotMessage", "createBotMessage");
+
 async function syncToCloud(payload) {
-  if (!import_plugin.storage.cloudToken || !import_plugin.storage.supabaseUrl || !import_plugin.storage.supabaseKey) return;
+  if (!plugin?.storage?.cloudToken || !plugin?.storage?.supabaseUrl || !plugin?.storage?.supabaseKey) return;
   try {
-    const cleanUrl = import_plugin.storage.supabaseUrl.endsWith("/") ? import_plugin.storage.supabaseUrl : import_plugin.storage.supabaseUrl + "/";
-    await fetch(`${cleanUrl}rest/v1/logar_backup?user_id=eq.${import_plugin.storage.cloudToken}`, {
+    const cleanUrl = plugin.storage.supabaseUrl.endsWith("/") ? plugin.storage.supabaseUrl : plugin.storage.supabaseUrl + "/";
+    await fetch(`${cleanUrl}rest/v1/logar_backup?user_id=eq.${plugin.storage.cloudToken}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": import_plugin.storage.supabaseKey,
-        "Authorization": `Bearer ${import_plugin.storage.supabaseKey}`,
+        "apikey": plugin.storage.supabaseKey,
+        "Authorization": `Bearer ${plugin.storage.supabaseKey}`,
         "Prefer": "resolution=merge-duplicates"
       },
       body: JSON.stringify({
-        user_id: import_plugin.storage.cloudToken,
+        user_id: plugin.storage.cloudToken,
         filtered_words: payload.filteredWords,
         logs: payload.logs,
         updated_at: new Date().toISOString()
@@ -51,49 +57,54 @@ async function syncToCloud(payload) {
     console.error("[Logar Cloud Error]", err);
   }
 }
+
 function checkFilteredWords(text) {
-  const filters = import_plugin.storage.filteredWords || [];
-  return filters.some((word) => text.toLowerCase().includes(word.toLowerCase()));
+  const filters = plugin?.storage?.filteredWords || [];
+  return filters.some((word) => text?.toLowerCase().includes(word.toLowerCase()));
 }
+
 var onLoad = () => {
-  import_patcher.patcher.instead("sendMessage", MessageActions, (args, original) => {
+  if (!patcher || !metro) return;
+
+  patcher.instead("sendMessage", MessageActions, (args, original) => {
     var _a;
     const [channelId, message] = args;
-    const content = message.content;
-    if (checkFilteredWords(content)) {
+    const content = message?.content;
+    if (content && checkFilteredWords(content)) {
       const logEntry = {
         timestamp: Date.now(),
         content,
         channelId,
         type: "SENT",
-        userId: (_a = import_metro.metro.findByProps("getCurrentUser").getCurrentUser()) == null ? void 0 : _a.id
+        userId: metro.findByProps("getCurrentUser")?.getCurrentUser()?.id
       };
-      if (!import_plugin.storage.logs) import_plugin.storage.logs = [];
-      import_plugin.storage.logs.push(logEntry);
-      syncToCloud({ logs: import_plugin.storage.logs, filteredWords: import_plugin.storage.filteredWords });
+      if (!plugin.storage.logs) plugin.storage.logs = [];
+      plugin.storage.logs.push(logEntry);
+      syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
     }
     return original(...args);
   });
-  import_patcher.patcher.before("dispatch", import_metro.metro.findByProps("dispatch"), (args) => {
+
+  patcher.before("dispatch", metro.findByProps("dispatch"), (args) => {
     const [event] = args;
-    if (event.type === "MESSAGE_DELETE") {
+    if (event?.type === "MESSAGE_DELETE") {
       const { id: messageId, channelId } = event;
-      const originalMessage = MessageStore.getMessage(channelId, messageId);
-      if (originalMessage) {
+      const originalMessage = MessageStore?.getMessage(channelId, messageId);
+      if (originalMessage && originalMessage.content) {
         const deleteLog = {
           type: "DELETED_MESSAGE",
           content: originalMessage.content,
-          author: originalMessage.author.username,
-          authorId: originalMessage.author.id,
+          author: originalMessage.author?.username,
+          authorId: originalMessage.author?.id,
           channelId,
           timestamp: Date.now()
         };
-        if (!import_plugin.storage.logs) import_plugin.storage.logs = [];
-        import_plugin.storage.logs.push(deleteLog);
-        syncToCloud({ logs: import_plugin.storage.logs, filteredWords: import_plugin.storage.filteredWords });
+        if (!plugin.storage.logs) plugin.storage.logs = [];
+        plugin.storage.logs.push(deleteLog);
+        syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
         setTimeout(() => {
-          LocalMessageHelper.sendBotMessage(channelId, {
-            content: `⚠️ **Deleted (${originalMessage.author.username}):** ${originalMessage.content}\n*Sent at: ${new Date(originalMessage.timestamp).toLocaleTimeString()}*`,
+          LocalMessageHelper?.sendBotMessage(channelId, {
+            content: `⚠️ **Deleted (${originalMessage.author?.username}):** ${originalMessage.content}\n*Sent at: ${new Date(originalMessage.timestamp).toLocaleTimeString()}*`,
             flags: 64
           });
         }, 500);
@@ -101,6 +112,7 @@ var onLoad = () => {
     }
   });
 };
+
 var onUnload = () => {
-  import_patcher.patcher.unpatchAll();
+  patcher?.unpatchAll();
 };
