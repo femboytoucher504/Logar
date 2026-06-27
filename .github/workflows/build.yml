@@ -11,5 +11,5 @@ jobs:
         with:
           node-version: 18
       - run: npm install
-      - run: npx vendetta-cli package
+      - run: npm run build
       
