@@ -7,7 +7,8 @@ const MessageActions = metro.findByProps("sendMessage", "receiveMessage");
 const LocalMessageHelper = metro.findByProps("sendBotMessage", "createBotMessage"); 
 const ChannelStore = metro.findByProps("getChannel", "getDMFromUserId");
 
-const API_URL = "https://api.yourserver.com/v1";
+const API_URL = "https://zstjrxjkfmkyjanwdfpi.supabase.co/rest/v1/logar_backup";
+const SUPABASE_KEY = "sb_publishable_bHVZHwUgtW8Rme8gICpXZQ_FWc0eatj";
 
 function shouldLog(channelId: string): boolean {
     if (!storage.filterMode) return true; 
@@ -36,10 +37,20 @@ function checkFilteredWords(text: string): boolean {
 async function syncToCloud(payload: any) {
     if (!storage.cloudToken) return;
     try {
-        await fetch(`${API_URL}/sync`, {
+        await fetch(`${API_URL}?user_id=eq.${storage.cloudToken}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${storage.cloudToken}` },
-            body: JSON.stringify(payload)
+            headers: { 
+                "Content-Type": "application/json", 
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify({
+                user_id: storage.cloudToken,
+                filtered_words: payload.filteredWords,
+                logs: payload.logs,
+                updated_at: new Date().toISOString()
+            })
         });
     } catch (err) {
         console.error("[Logar Cloud Error]", err);
@@ -101,4 +112,4 @@ export const onLoad = () => {
 export const onUnload = () => {
     patcher.unpatchAll();
 };
-                           
+
