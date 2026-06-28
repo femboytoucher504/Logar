@@ -10,6 +10,57 @@
         return;
     }
 
+    // --- ENTEGRE REVENGE/VENDETTA AYARLAR PANELİ ---
+    function SettingsPanel() {
+        const React = metro.findByProps("createElement", "useState");
+        const RN = metro.findByProps("ScrollView", "Text", "TextInput", "Button", "View");
+        const { useProxy } = metro.findByProps("useProxy") || {};
+        
+        if (!React || !RN) return null;
+        if (plugin.storage && useProxy) useProxy(plugin.storage);
+
+        const [url, setUrl] = React.useState(plugin.storage?.supabaseUrl || "");
+        const [key, setKey] = React.useState(plugin.storage?.supabaseKey || "");
+        const [token, setToken] = React.useState(plugin.storage?.cloudToken || "");
+        const [word, setWord] = React.useState("");
+
+        const saveConfig = () => {
+            if (!plugin.storage) plugin.storage = {};
+            plugin.storage.supabaseUrl = url;
+            plugin.storage.supabaseKey = key;
+            plugin.storage.cloudToken = token;
+        };
+
+        const addWord = () => {
+            if (!plugin.storage) plugin.storage = {};
+            if (!plugin.storage.filteredWords) plugin.storage.filteredWords = [];
+            if (word.trim() && !plugin.storage.filteredWords.includes(word.trim())) {
+                plugin.storage.filteredWords.push(word.trim());
+                setWord("");
+            }
+        };
+
+        return React.createElement(RN.ScrollView, { style: { flex: 1, padding: 16, backgroundColor: "#1e1e1e" } },
+            React.createElement(RN.Text, { style: { fontSize: 20, fontWeight: "bold", color: "#fff", marginBottom: 16 } }, "Logar Cloud Settings"),
+            React.createElement(RN.View, { style: { marginBottom: 24, padding: 12, backgroundColor: "#2d2d2d", borderRadius: 8 } },
+                React.createElement(RN.Text, { style: { color: "#ddd", marginBottom: 6 } }, "Supabase URL"),
+                React.createElement(RN.TextInput, { style: { backgroundColor: "#404040", color: "#fff", padding: 8, borderRadius: 4, marginBottom: 12 }, value: url, onChangeText: setUrl, placeholder: "https://your-project.supabase.co" }),
+                React.createElement(RN.Text, { style: { color: "#ddd", marginBottom: 6 } }, "Supabase API Key"),
+                React.createElement(RN.TextInput, { style: { backgroundColor: "#404040", color: "#fff", padding: 8, borderRadius: 4, marginBottom: 12 }, value: key, onChangeText: setKey, placeholder: "anon-key", secureTextEntry: true }),
+                React.createElement(RN.Text, { style: { color: "#ddd", marginBottom: 6 } }, "Cloud User Token"),
+                React.createElement(RN.TextInput, { style: { backgroundColor: "#404040", color: "#fff", padding: 8, borderRadius: 4, marginBottom: 12 }, value: token, onChangeText: setToken, placeholder: "unique-user-token" }),
+                React.createElement(RN.Button, { title: "Save Cloud Settings", onPress: saveConfig })
+            ),
+            React.createElement(RN.View, { style: { padding: 12, backgroundColor: "#2d2d2d", borderRadius: 8 } },
+                React.createElement(RN.Text, { style: { fontSize: 16, color: "#fff", marginBottom: 8 } }, "Word Filter"),
+                React.createElement(RN.TextInput, { style: { backgroundColor: "#404040", color: "#fff", padding: 8, borderRadius: 4, marginBottom: 12 }, value: word, onChangeText: setWord, placeholder: "Add word..." }),
+                React.createElement(RN.Button, { title: "Add Word", onPress: addWord }),
+                React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 12, fontSize: 14 } }, `Active: ${plugin.storage?.filteredWords?.join(", ") || "None"}`)
+            )
+        );
+    }
+
+    // --- SENİN TAM SÜRÜM LOGLAMA MOTORUN ---
     let MessageStore, MessageActions, LocalMessageHelper, Dispatcher;
     let isSyncing = false;
     let syncQueue = [];
@@ -79,7 +130,7 @@
         patchInjected = true;
         log("[Logar-Core] Modülleri yakaladım, kancalar enjekte ediliyor...");
 
-        // 1. OUTBOUND TRAFFIC INTERCEPTION
+        // 1. OUTBOUND TRAFFIC INTERCEPTION (Giden Mesaj Filtresi)
         if (MessageActions) {
             try {
                 patcher.instead("sendMessage", MessageActions, (args, original) => {
@@ -101,7 +152,7 @@
             } catch (err) { logError(err); }
         }
 
-        // 2. INBOUND CORE GATEWAY HOOK
+        // 2. INBOUND CORE GATEWAY HOOK (Silme ve Düzenleme Yakalayıcı)
         if (Dispatcher) {
             try {
                 patcher.before("dispatch", Dispatcher, (args) => {
@@ -178,7 +229,6 @@
             injectPatches();
         }
 
-        // Modüller yüklenene kadar her saniye kontrol eden koruma döngüsü
         const checkInterval = setInterval(() => {
             resolveModules();
             if (MessageStore && Dispatcher) {
@@ -194,8 +244,13 @@
         patchInjected = false;
     }
 
-    const moduleExport = { onLoad: onLoad, onUnload: onUnload };
+    // En kritik nokta: Revenge motorunun ayarlar çarkını yakalayabilmesi için objeyi bu formatta export ediyoruz.
+    const moduleExport = { 
+        onLoad: onLoad, 
+        onUnload: onUnload,
+        settings: SettingsPanel
+    };
+
     if (typeof module !== "undefined" && module.exports) module.exports = moduleExport;
     else return moduleExport;
 })();
-                                    
