@@ -1,12 +1,8 @@
 {
   "name": "Logar",
-  "description": "Message logger plugin for Revenge.",
+  "description": "Lightweight message logger.",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-sync-logger",
-  "version": "1.0.0",
-  "permissions": [
-    "STORAGE",
-    "NETWORKING"
-  ]
+  "hash": "logar-v3-fresh",
+  "version": "1.0.3"
 }
