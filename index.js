@@ -6,13 +6,14 @@
         return;
     }
 
-    const MessageStore = metro.findByProps("getMessages", "getMessage");
-    const MessageActions = metro.findByProps("sendMessage", "receiveMessage");
-    const LocalMessageHelper = metro.findByProps("sendBotMessage", "createBotMessage");
+    // Modülleri try-catch içine alarak eklentinin çökmesini engelliyoruz
+    let MessageStore, MessageActions, LocalMessageHelper;
+    try { MessageStore = metro.findByProps("getMessages", "getMessage"); } catch(e) {}
+    try { MessageActions = metro.findByProps("sendMessage", "receiveMessage"); } catch(e) {}
+    try { LocalMessageHelper = metro.findByProps("sendBotMessage", "createBotMessage"); } catch(e) {}
 
     async function syncToCloud(payload) {
         if (!plugin.storage?.cloudToken || !plugin.storage?.supabaseUrl || !plugin.storage?.supabaseKey) return;
-        
         try {
             const cleanUrl = plugin.storage.supabaseUrl.endsWith("/") ? plugin.storage.supabaseUrl : plugin.storage.supabaseUrl + "/";
             await fetch(`${cleanUrl}rest/v1/logar_backup?user_id=eq.${plugin.storage.cloudToken}`, {
@@ -43,97 +44,96 @@
 
     function onLoad() {
         console.log("[Logar] Message logger system activated.");
-
         if (!plugin.storage.logs) plugin.storage.logs = [];
 
-        patcher.instead("sendMessage", MessageActions, (args, original) => {
-            const [channelId, message] = args;
-            const content = message?.content;
+        // Sadece modül başarıyla bulunduysa patch atıyoruz
+        if (MessageActions) {
+            try {
+                patcher.instead("sendMessage", MessageActions, (args, original) => {
+                    const [channelId, message] = args;
+                    const content = message?.content;
+                    if (content && checkFilteredWords(content)) {
+                        const logEntry = { timestamp: Date.now(), content: content, channelId: channelId, type: "SENT_FILTERED_WORD" };
+                        plugin.storage.logs.push(logEntry);
+                        syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
+                    }
+                    return original(...args);
+                });
+            } catch(e) { console.error("[Logar] Patch sendMessage failed", e); }
+        }
 
-            if (content && checkFilteredWords(content)) {
-                const logEntry = {
-                    timestamp: Date.now(),
-                    content: content,
-                    channelId: channelId,
-                    type: "SENT_FILTERED_WORD"
-                };
-                plugin.storage.logs.push(logEntry);
-                syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
-            }
-            return original(...args);
-        });
-
-        patcher.before("dispatch", metro.findByProps("dispatch"), (args) => {
-            const [event] = args;
-            
-            if (event?.type === "MESSAGE_DELETE") {
-                const { id: messageId, channelId } = event;
-                const originalMessage = MessageStore?.getMessage(channelId, messageId);
-
-                if (originalMessage && originalMessage.content) {
-                    const deleteLog = {
-                        type: "DELETED_MESSAGE",
-                        content: originalMessage.content,
-                        author: originalMessage.author?.username || "Unknown User",
-                        authorId: originalMessage.author?.id,
-                        channelId: channelId,
-                        timestamp: Date.now()
-                    };
-
-                    plugin.storage.logs.push(deleteLog);
-                    syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
-
-                    setTimeout(() => {
-                        LocalMessageHelper?.sendBotMessage(channelId, {
-                            content: `⚠️ **Deleted (${originalMessage.author?.username || "Unknown"}):** ${originalMessage.content}\n*Time: ${new Date().toLocaleTimeString()}*`,
-                            flags: 64
-                        });
-                    }, 400);
-                }
-            }
-
-            if (event?.type === "MESSAGE_UPDATE") {
-                const { message: updatedMessage } = event;
-                if (!updatedMessage || !updatedMessage.id || !updatedMessage.channel_id) return;
-
-                const oldMessage = MessageStore?.getMessage(updatedMessage.channel_id, updatedMessage.id);
+        try {
+            patcher.before("dispatch", metro.findByProps("dispatch"), (args) => {
+                const [event] = args;
                 
-                if (oldMessage && oldMessage.content && updatedMessage.content && oldMessage.content !== updatedMessage.content) {
-                    const editLog = {
-                        type: "EDITED_MESSAGE",
-                        oldContent: oldMessage.content,
-                        newContent: updatedMessage.content,
-                        author: oldMessage.author?.username || "Unknown User",
-                        authorId: oldMessage.author?.id,
-                        channelId: updatedMessage.channel_id,
-                        timestamp: Date.now()
-                    };
+                if (event?.type === "MESSAGE_DELETE") {
+                    const { id: messageId, channelId } = event;
+                    const originalMessage = MessageStore?.getMessage(channelId, messageId);
 
-                    plugin.storage.logs.push(editLog);
-                    syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
+                    if (originalMessage && originalMessage.content) {
+                        const deleteLog = {
+                            type: "DELETED_MESSAGE",
+                            content: originalMessage.content,
+                            author: originalMessage.author?.username || "Unknown User",
+                            authorId: originalMessage.author?.id,
+                            channelId: channelId,
+                            timestamp: Date.now()
+                        };
 
-                    setTimeout(() => {
-                        LocalMessageHelper?.sendBotMessage(updatedMessage.channel_id, {
-                            content: `✏️ **Edited (${oldMessage.author?.username || "Unknown"}):**\n**Old:** ${oldMessage.content}\n**New:** ${updatedMessage.content}`,
-                            flags: 64
-                        });
-                    }, 400);
+                        plugin.storage.logs.push(deleteLog);
+                        syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
+
+                        if (LocalMessageHelper) {
+                            setTimeout(() => {
+                                LocalMessageHelper.sendBotMessage(channelId, {
+                                    content: `⚠️ **Deleted (${originalMessage.author?.username || "Unknown"}):** ${originalMessage.content}\n*Time: ${new Date().toLocaleTimeString()}*`,
+                                    flags: 64
+                                });
+                            }, 400);
+                        }
+                    }
                 }
-            }
-        });
+
+                if (event?.type === "MESSAGE_UPDATE") {
+                    const { message: updatedMessage } = event;
+                    if (!updatedMessage || !updatedMessage.id || !updatedMessage.channel_id) return;
+
+                    const oldMessage = MessageStore?.getMessage(updatedMessage.channel_id, updatedMessage.id);
+                    
+                    if (oldMessage && oldMessage.content && updatedMessage.content && oldMessage.content !== updatedMessage.content) {
+                        const editLog = {
+                            type: "EDITED_MESSAGE",
+                            oldContent: oldMessage.content,
+                            newContent: updatedMessage.content,
+                            author: oldMessage.author?.username || "Unknown User",
+                            authorId: oldMessage.author?.id,
+                            channelId: updatedMessage.channel_id,
+                            timestamp: Date.now()
+                        };
+
+                        plugin.storage.logs.push(editLog);
+                        syncToCloud({ logs: plugin.storage.logs, filteredWords: plugin.storage.filteredWords });
+
+                        if (LocalMessageHelper) {
+                            setTimeout(() => {
+                                LocalMessageHelper.sendBotMessage(updatedMessage.channel_id, {
+                                    content: `✏️ **Edited (${oldMessage.author?.username || "Unknown"}):**\n**Old:** ${oldMessage.content}\n**New:** ${updatedMessage.content}`,
+                                    flags: 64
+                                });
+                            }, 400);
+                        }
+                    }
+                }
+            });
+        } catch(e) { console.error("[Logar] Dispatch patch failed", e); }
     }
 
     function onUnload() {
-        if (patcher) {
-            patcher.unpatchAll();
-        }
+        if (patcher) { patcher.unpatchAll(); }
         console.log("[Logar] Message logger system deactivated.");
     }
 
-    const pluginObject = {
-        onLoad: onLoad,
-        onUnload: onUnload
-    };
+    const pluginObject = { onLoad: onLoad, onUnload: onUnload };
 
     if (typeof module !== "undefined" && module.exports) {
         module.exports = pluginObject;
@@ -141,3 +141,4 @@
         return pluginObject;
     }
 })();
+                           
