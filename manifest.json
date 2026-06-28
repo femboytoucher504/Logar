@@ -3,8 +3,8 @@
   "description": "Logar Cloud Logging System",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-v11-full-engine",
   "version": "2.1.0",
+  "type": "plugin",
   "permissions": [
     "STORAGE",
     "NETWORKING"
