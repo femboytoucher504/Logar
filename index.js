@@ -1,29 +1,29 @@
-// Revenge / Vendetta standart eklenti tanımı
-const { metro, patcher, plugin } = window.revenge || window.vendetta || {};
+(() => {
+    // Revenge / Vendetta global API'lerini güvenli sekilde yakalıyoruz
+    const { metro, patcher, plugin } = window.revenge || window.vendetta || {};
 
-function onLoad() {
-    console.log("[Logar] Eklenti basariyla yuklendi!");
-    
-    // Revenge loglarına düssün diye test uyarısı
-    if (metro) {
-        try {
-            const LocalMessageHelper = metro.findByProps("sendBotMessage", "createBotMessage");
-            // Eklenti açıldığında sisteme sadece bir log düsmesi için bos bırakabiliriz
-        } catch(e) {
-            console.error(e);
+    // Eklentinin ana fonksiyonları
+    function onLoad() {
+        console.log("[Logar] Eklenti basariyla tetiklendi!");
+    }
+
+    function onUnload() {
+        if (patcher) {
+            patcher.unpatchAll();
         }
+        console.log("[Logar] Eklenti deaktif edildi.");
     }
-}
 
-function onUnload() {
-    if (patcher) {
-        patcher.unpatchAll();
+    // Revenge eklenti motorunun geri dönüs (export) bekledigi alan
+    const pluginObject = {
+        onLoad: onLoad,
+        onUnload: onUnload
+    };
+
+    // Sistemi sisteme register ediyoruz (Revenge / Vendetta uyumlulugu)
+    if (typeof module !== "undefined" && module.exports) {
+        module.exports = pluginObject;
+    } else {
+        return pluginObject;
     }
-    console.log("[Logar] Eklenti devre disi birakildi.");
-}
-
-// Revenge'in eklentiyi taniyabilmesi için export yapısı
-module.exports = {
-    onLoad: onLoad,
-    onUnload: onUnload
-};
+})();
