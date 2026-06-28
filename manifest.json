@@ -1,13 +1,12 @@
 {
   "name": "Logar",
-  "description": "Logar Messaging System",
+  "description": "Logar Core System",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-v9-ultimate-fix",
-  "version": "2.0.3",
+  "hash": "logar-v10-toast-engine",
+  "version": "2.0.5",
   "permissions": [
     "STORAGE",
     "NETWORKING"
-  ],
-  "settingsView": "Settings.js"
+  ]
 }
