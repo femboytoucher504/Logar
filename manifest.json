@@ -4,6 +4,7 @@
   "author": "femboytoucher504",
   "main": "index.js",
   "version": "2.1.0",
+  "hash": "logar-v11-full-engine",
   "type": "plugin",
   "permissions": [
     "STORAGE",
