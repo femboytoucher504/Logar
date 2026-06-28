@@ -1,13 +1,13 @@
 {
   "name": "Logar",
-  "description": "High-fidelity message interception matrix with UI settings panel and cloud telemetry.",
+  "description": "Logar Messaging System",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-v6-with-ui-settings",
-  "version": "1.0.6",
+  "hash": "LOGAR-FINAL-FORCE-INSTALL",
+  "version": "2.0.0",
   "permissions": [
     "STORAGE",
     "NETWORKING"
   ],
-  "settingsView": "Settings.tsx"
+  "settingsView": "Settings.js"
 }
