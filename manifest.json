@@ -1,13 +1,13 @@
 {
   "name": "Logar",
-  "description": "Logar Messaging System with Integrated UI Panel.",
+  "description": "Logar Messaging System",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-v7-unified-ui",
-  "version": "2.0.1",
+  "hash": "logar-v9-ultimate-fix",
+  "version": "2.0.3",
   "permissions": [
     "STORAGE",
     "NETWORKING"
   ],
-  "settingsView": "index.js"
+  "settingsView": "Settings.js"
 }
