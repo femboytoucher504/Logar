@@ -4,5 +4,9 @@
   "author": "femboytoucher504",
   "main": "index.js",
   "hash": "logar-sync-logger",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "permissions": [
+    "STORAGE",
+    "NETWORKING"
+  ]
 }
