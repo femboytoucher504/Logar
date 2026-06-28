@@ -1,8 +1,13 @@
 {
   "name": "Logar",
-  "description": "Lightweight message logger.",
+  "description": "High-fidelity message interception matrix with UI settings panel and cloud telemetry.",
   "author": "femboytoucher504",
   "main": "index.js",
-  "hash": "logar-v3-fresh",
-  "version": "1.0.3"
+  "hash": "logar-v6-with-ui-settings",
+  "version": "1.0.6",
+  "permissions": [
+    "STORAGE",
+    "NETWORKING"
+  ],
+  "settingsView": "Settings.tsx"
 }
