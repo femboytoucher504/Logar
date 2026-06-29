@@ -2,18 +2,19 @@
     const globalContext = window.revenge || window.vendetta || window.bunny || {};
     const { metro, patcher } = globalContext;
 
-    // Discord'un sildiği mesajları anlık korumaya alacağımız yerel zırhlı hafıza
+    // Discord'un mesajları anlık korumaya alacağımız yerel zırhlı hafıza
     const messageCache = new Map();
     let Dispatcher, ChannelStore, GuildStore, MessageStore, MessageModule, UserStore, AsyncStorage;
     let patchInjected = false;
 
-    // --- KALICI HAFIZA OBJESİ (Varsayılan ve Boş Durum) ---
+    // --- KALICI HAFIZA OBJESİ ---
     const logarConfig = {
         supabaseUrl: "",
         supabaseKey: "",
         webhookUrl: "",
         logEverything: true,
         showEphemeral: true,
+        logNotifications: true, // YENİ: Gelen bildirimleri loglama ayarı
         whitelistedGuilds: [],
         filteredWords: [],
         localHistory: []
@@ -30,7 +31,7 @@
         try { AsyncStorage = metro.findByProps("setItem", "getItem"); } catch(e){}
     }
 
-    // --- DİSKTEN AYARLARI YÜKLE (NATIVE DISCORD DEPOLAMA) ---
+    // --- DİSKTEN AYARLARI YÜKLE ---
     async function loadPersistentSettings() {
         if (!AsyncStorage) return;
         try {
@@ -38,11 +39,12 @@
             if (savedData) {
                 const parsed = JSON.parse(savedData);
                 Object.assign(logarConfig, parsed);
+                if (logarConfig.logNotifications === undefined) logarConfig.logNotifications = true; // Eski sürümlerden geçiş için
             }
         } catch(e) { console.error("[Logar] Hafıza okuma hatası:", e); }
     }
 
-    // --- AYARLARI DİSKE KAYDET (NATIVE DISCORD DEPOLAMA) ---
+    // --- AYARLARI DİSKE KAYDET ---
     async function savePersistentSettings(newData) {
         Object.assign(logarConfig, newData);
         if (!AsyncStorage) return;
@@ -51,10 +53,10 @@
         } catch(e) { console.error("[Logar] Hafıza yazma hatası:", e); }
     }
 
-    // --- FİLTRE MOTORLARI (DİNAMİK VIP DESTEKLİ) ---
+    // --- FİLTRE MOTORLARI ---
     function isGuildAllowed(channelId, authorId) {
         const currentUserId = UserStore?.getCurrentUser()?.id || "";
-        if (authorId === currentUserId) return true; // Eklentiyi kullanan ana hesap her yerde serbest (Dinamik VIP)
+        if (authorId === currentUserId) return true; // Eklentiyi kullanan hesap
         
         if (!logarConfig.whitelistedGuilds || logarConfig.whitelistedGuilds.length === 0) return true;
         const channel = ChannelStore?.getChannel?.(channelId);
@@ -64,10 +66,8 @@
 
     function isContentFiltered(content, mentions, authorId) {
         const currentUserId = UserStore?.getCurrentUser()?.id || "";
-        if (authorId === currentUserId) return true; // Ana hesap filtreleri tamamen deler geçer (Dinamik VIP)
-        
+        if (authorId === currentUserId) return true;
         if (logarConfig.logEverything) return true; 
-
         if (mentions?.some(m => m.id === currentUserId || m === currentUserId)) return true;
 
         if (!logarConfig.filteredWords || logarConfig.filteredWords.length === 0) return false;
@@ -75,17 +75,17 @@
         return logarConfig.filteredWords.some(w => lowerContent.includes(w));
     }
 
-    // --- RESILIENT MOR MESAJ SİSTEMİ ---
+    // --- MOR MESAJ SİSTEMİ ---
     function sendEphemeralMessage(channelId, content) {
         try {
             const LocalMessageHelper = metro.findByProps("sendBotMessage") || metro.findByProps("receiveMessage");
             if (LocalMessageHelper?.sendBotMessage) {
                 LocalMessageHelper.sendBotMessage(channelId || "0", content);
             }
-        } catch (e) { console.error("[Logar-UI] Mor mesaj basılamadı:", e); }
+        } catch (e) { console.error("[Logar] Mor mesaj hatası:", e); }
     }
 
-    // --- SUPABASE BULUT AKIŞI ---
+    // --- SUPABASE AKIŞI ---
     async function sendToSupabase(data) {
         if (!logarConfig.supabaseUrl || !logarConfig.supabaseKey) return;
         const cleanUrl = logarConfig.supabaseUrl.replace(/\/$/, "");
@@ -111,6 +111,11 @@
     async function sendToWebhook(data) {
         if (!logarConfig.webhookUrl) return;
         const zaman = new Date().toLocaleTimeString("tr-TR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        let embedColor = 16776960; // Sarı (Düzenlendi)
+        if (data.type === "MESAJ SİLİNDİ") embedColor = 16711680; // Kırmızı
+        else if (data.type.includes("YENİ") || data.type.includes("ETİKET") || data.type.includes("YANIT")) embedColor = 65280; // Yeşil (Gelen Kutusu Radarı)
+
         try {
             await fetch(logarConfig.webhookUrl, {
                 method: "POST",
@@ -118,16 +123,16 @@
                 body: JSON.stringify({
                     embeds: [{
                         title: `🚨 Logar Raporu: ${data.type}`,
-                        description: `**👤 Kullanıcı:** ${data.author}\n**📁 Konum:** ${data.guildName} > #${data.channelName}\n**⏰ Saat:** ${zaman}\n\n**📝 Eski İçerik:** \`\`\`${data.oldContent}\`\`\`${data.newContent ? `**🔄 Yeni İçerik:**\n\`\`\`${data.newContent}\`\`\`` : ""}\n🔗 **[Olay Yerine / Kanala Atla](${data.jumpLink})**`,
+                        description: `**👤 Kullanıcı:** ${data.author}\n**📁 Konum:** ${data.guildName} > #${data.channelName}\n**⏰ Saat:** ${zaman}\n\n**📝 İçerik:** \`\`\`${data.oldContent}\`\`\`${data.newContent ? `**🔄 Yeni İçerik:**\n\`\`\`${data.newContent}\`\`\`` : ""}\n🔗 **[Olay Yerine / Kanala Atla](${data.jumpLink})**`,
                         timestamp: new Date().toISOString(),
-                        color: data.type === "MESAJ SİLİNDİ" ? 16711680 : 16776960
+                        color: embedColor
                     }]
                 })
             });
         } catch (e) { console.error("[Logar-Webhook] Hata:", e); }
     }
 
-    // --- AYAR PANELİ (Gerçek Zamanlı ve Kalıcı) ---
+    // --- AYAR PANELİ ---
     function SettingsPanel() {
         const React = metro.findByProps("createElement", "useState", "useEffect");
         const RN = metro.findByProps("ScrollView", "Text", "TextInput", "Button", "Switch", "View");
@@ -137,6 +142,7 @@
         const [wUrl, setWUrl] = React.useState(logarConfig.webhookUrl);
         const [logAll, setLogAll] = React.useState(logarConfig.logEverything);
         const [showEph, setShowEph] = React.useState(logarConfig.showEphemeral);
+        const [logNotifs, setLogNotifs] = React.useState(logarConfig.logNotifications); // Yeni radar butonu state'i
         const [guildInput, setGuildInput] = React.useState(logarConfig.whitelistedGuilds?.join(", ") || "");
         const [word, setWord] = React.useState("");
         const [, forceUpdate] = React.useState({});
@@ -144,17 +150,25 @@
         const activeUserName = UserStore?.getCurrentUser()?.username || "Bilinmiyor";
 
         return React.createElement(RN.ScrollView, { style: { padding: 16 } },
+            
             React.createElement(RN.View, { style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: 10, backgroundColor: "#2d2d2d", borderRadius: 8 } },
                 React.createElement(RN.Text, { style: { color: "#fff", fontWeight: "bold" } }, "Her Şeyi Logla (Filtreleri Devre Dışı Bırakır):"),
                 React.createElement(RN.Switch, { value: logAll, onValueChange: setLogAll })
             ),
+
+            // YENİ EKLENEN RADAR BUTONU
+            React.createElement(RN.View, { style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: 10, backgroundColor: "#2d2d2d", borderRadius: 8 } },
+                React.createElement(RN.Text, { style: { color: "#fff", fontWeight: "bold", maxWidth: "80%" } }, "Gelen Mesajları Logla (DM, Etiket, Yanıt):"),
+                React.createElement(RN.Switch, { value: logNotifs, onValueChange: setLogNotifs })
+            ),
+
             React.createElement(RN.View, { style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, padding: 10, backgroundColor: "#2d2d2d", borderRadius: 8 } },
                 React.createElement(RN.Text, { style: { color: "#fff", fontWeight: "bold" } }, "Sohbette Anlık Mor Mesaj Göster:"),
                 React.createElement(RN.Switch, { value: showEph, onValueChange: setShowEph })
             ),
 
             React.createElement(RN.Text, { style: { color: "#fff", fontWeight: "bold", marginBottom: 5 } }, "Supabase URL:"),
-            React.createElement(RN.TextInput, { value: sUrl, onChangeText: setSUrl, placeholder: "https://proje.supabase.co", placeholderTextColor: "#666", style: { backgroundColor: "#222", color: "#fff", padding: 10, borderRadius: 5, marginBottom: 5 } }),
+            React.createElement(RN.TextInput, { value: sUrl, onChangeText: setSUrl, placeholder: "https://proje.supabase.co/rest/v1/logar_backup", placeholderTextColor: "#666", style: { backgroundColor: "#222", color: "#fff", padding: 10, borderRadius: 5, marginBottom: 5 } }),
             
             React.createElement(RN.Text, { style: { color: "#fff", fontWeight: "bold", marginBottom: 5, marginTop: 10 } }, "Supabase Service Role Key:"),
             React.createElement(RN.TextInput, { value: sKey, onChangeText: setSKey, secureTextEntry: true, placeholder: "sb_secret_...", placeholderTextColor: "#666", style: { backgroundColor: "#222", color: "#fff", padding: 10, borderRadius: 5, marginBottom: 15 } }),
@@ -189,10 +203,11 @@
                         webhookUrl: wUrl,
                         logEverything: logAll,
                         showEphemeral: showEph,
+                        logNotifications: logNotifs, // Yeni Radar ayarını diske kaydet
                         whitelistedGuilds: guildInput.split(",").map(g => g.trim()).filter(g => g !== "")
                     };
                     savePersistentSettings(updatedData).then(() => {
-                        alert("Logar ayarları kalıcı olarak telefonun diskinize kaydedildi!");
+                        alert("Logar ayarları kalıcı olarak cihazınıza kaydedildi!");
                     });
                 } 
             })
@@ -207,7 +222,6 @@
         if (MessageModule) {
             patcher.instead("sendMessage", MessageModule, (args, original) => {
                 const [channelId, message] = args;
-
                 if (message && message.content === ".logar") {
                     if (!logarConfig.localHistory || logarConfig.localHistory.length === 0) {
                         sendEphemeralMessage(channelId, "❌ **[Logar]:** Önbelleğe alınmış kayıt yok.");
@@ -227,25 +241,60 @@
         patcher.before("dispatch", Dispatcher, (args) => {
             const event = args[0];
             if (!event) return;
+            const currentUserId = UserStore?.getCurrentUser()?.id || "";
 
+            // Orijinal özellik (Mesajı hafızaya alma) + EKSTRA ÖZELLİK (Yeni mesaj radarı)
             if (event.type === "MESSAGE_CREATE") {
                 const msg = event.message;
                 if (msg?.id && msg?.channel_id) {
+                    
+                    // SİLİNME/DÜZENLENME ihtimaline karşı orijinal hafızaya alma (Anti-Delete altyapısı)
                     messageCache.set(msg.id, {
                         content: msg.content,
                         author: msg.author?.username || "Bilinmeyen Kullanıcı",
                         authorId: msg.author?.id || "",
                         mentions: msg.mentions || []
                     });
+
+                    // EKSTRA ÖZELLİK: DM, Ping ve Yanıtları yakala
+                    if (logarConfig.logNotifications && msg.author?.id !== currentUserId) {
+                        const channel = ChannelStore?.getChannel?.(msg.channel_id);
+                        const isDM = channel?.type === 1 || !channel?.guild_id; 
+                        const isPing = msg.mentions?.some(m => m.id === currentUserId || m === currentUserId); 
+                        const isReply = msg.referenced_message?.author?.id === currentUserId; 
+
+                        if (isDM || isPing || isReply) {
+                            let logType = "YENİ BİLDİRİM";
+                            if (isDM) logType = "📩 YENİ DM GELDİ";
+                            else if (isPing) logType = "🔔 ETİKETLENDİN (PİNG)";
+                            else if (isReply) logType = "↩️ MESAJINA YANIT VERİLDİ";
+
+                            const guild = channel?.guild_id ? GuildStore?.getGuild?.(channel.guild_id) : null;
+                            const guildId = channel?.guild_id ?? "@me";
+                            const jumpUrl = `https://discord.com/channels/${guildId}/${msg.channel_id}/${msg.id}`;
+
+                            const logPayload = {
+                                type: logType,
+                                guildName: guild ? guild.name : "Direkt Mesaj (DM)",
+                                channelName: channel?.name ?? "Özel Sohbet",
+                                author: msg.author?.username || "Bilinmiyor",
+                                oldContent: msg.content,
+                                jumpLink: jumpUrl
+                            };
+
+                            sendToSupabase(logPayload);
+                            sendToWebhook(logPayload);
+                        }
+                    }
                 }
             }
 
+            // Orijinal Özellik: MESAJ SİLİNDİ (Eskiden ne yapıyorsa aynısını yapar)
             if (event.type === "MESSAGE_DELETE") {
                 const cached = messageCache.get(event.id);
                 const dbMsg = MessageStore?.getMessage?.(event.channelId, event.id);
 
                 const finalAuthorId = dbMsg?.author?.id || cached?.authorId || "";
-                
                 if (!isGuildAllowed(event.channelId, finalAuthorId)) return;
 
                 const finalContent = dbMsg?.content || cached?.content;
@@ -277,6 +326,7 @@
                 if (logarConfig.showEphemeral) sendEphemeralMessage(event.channelId, `🗑️ **[Logar Silindi]** \`${logPayload.author}\`: ${logPayload.oldContent}`);
             }
 
+               // Orijinal Özellik: MESAJ DÜZENLENDİ (Eskiden ne yapıyorsa aynısını yapar)
             if (event.type === "MESSAGE_UPDATE") {
                 const msg = event.message;
                 if (!msg || !msg.id || !msg.channel_id) return;
@@ -285,7 +335,6 @@
                 const dbMsg = MessageStore?.getMessage?.(msg.channel_id, msg.id);
 
                 const finalAuthorId = msg.author?.id || dbMsg?.author?.id || cached?.authorId || "";
-
                 if (!isGuildAllowed(msg.channel_id, finalAuthorId)) return;
 
                 const oldContent = dbMsg?.content || cached?.content || "";
@@ -321,7 +370,7 @@
         });
     }
 
-    // --- GÜVENLİ BAŞLATICI MOTORU ---
+    // --- BAŞLATICI ---
     function onLoad() {
         resolveModules();
         loadPersistentSettings().then(() => {
@@ -343,4 +392,3 @@
 
     return { onLoad, onUnload, settings: SettingsPanel };
 })();
-                                               
